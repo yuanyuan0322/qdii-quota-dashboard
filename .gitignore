@@ -1,0 +1,21 @@
+__pycache__/
+*.pyc
+
+# 抓取缓存与中间产物
+_tmp_pdfs/
+_ttjj_cache/
+_ttjj_gg/
+_quota_raw.json
+_region_internal.json
+_results.json
+_universe.json
+
+# 日志
+*.log
+
+# 含内部渠道标注的产物，不入库
+*.xlsx
+
+# 本地服务运行态
+.vscode/
+.idea/

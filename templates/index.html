@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QDII 海外额度宝 · 额度排行</title>
+<style>
+  :root{
+    --brand:#1eb9e1; --brand-dark:#0d8fb8; --brand-soft:#e8f7fc;
+    --bg:#f4f6f9; --card:#fff; --line:#e6eaf0; --line-soft:#f0f3f7;
+    --text:#1f2937; --text2:#4b5563; --muted:#8d96a3;
+    --up:#d92b2b; --down:#12945a;
+    --ok:#e8f7ec; --ok-fg:#1a7f37;
+    --warn:#fff6e5; --warn-fg:#b26a00;
+    --stop:#fbe9e7; --stop-fg:#c62828;
+    --gray:#eceff1; --gray-fg:#546e7a;
+    --blue:#e8eaf6; --blue-fg:#3949ab;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"微软雅黑","Microsoft YaHei","STHeiti",-apple-system,"PingFang SC",sans-serif;
+    background:var(--bg); color:var(--text); font-size:13px; line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-variant-numeric:tabular-nums; font-feature-settings:"tnum"}
+
+  /* ---------------- header ---------------- */
+  header{
+    position:sticky; top:0; z-index:60;
+    background:linear-gradient(100deg,#1eb9e1 0%,#0d8fb8 100%);
+    color:#fff; padding:14px 24px;
+    box-shadow:0 2px 10px rgba(13,143,184,.25);
+  }
+  .hd-row{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  .hd-title{font-size:19px;font-weight:700;letter-spacing:.3px;display:flex;align-items:center;gap:9px}
+  .hd-title .dot{width:9px;height:9px;border-radius:50%;background:#a8f0ff;box-shadow:0 0 0 4px rgba(255,255,255,.18)}
+  .hd-sub{font-size:12px;opacity:.9;margin-top:2px}
+  .hd-spacer{flex:1}
+  .hd-meta{display:flex;align-items:center;gap:20px;font-size:12px;flex-wrap:wrap}
+  .hd-meta .item{display:flex;flex-direction:column;gap:2px}
+  .hd-meta .k{opacity:.78;font-size:11px}
+  .hd-meta .v{font-weight:600;font-size:13px}
+  .btn{
+    border:0;border-radius:7px;padding:8px 16px;font-size:12.5px;font-weight:600;
+    cursor:pointer;font-family:inherit;transition:.15s;white-space:nowrap;
+    background:#fff;color:var(--brand-dark);
+  }
+  .btn:hover{background:#eafaff;transform:translateY(-1px)}
+  .btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+  .btn.ghost{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.45)}
+  .btn.ghost:hover{background:rgba(255,255,255,.28)}
+  .pill{
+    display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:20px;
+    font-size:11.5px;font-weight:600;background:rgba(255,255,255,.18);
+    border:1px solid rgba(255,255,255,.35);color:#fff;
+  }
+  .pill.live{background:#fff;color:var(--brand-dark);border-color:#fff}
+  .spin{width:11px;height:11px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite}
+  .pill.live .spin{border-color:rgba(13,143,184,.3);border-top-color:var(--brand-dark)}
+  @keyframes sp{to{transform:rotate(360deg)}}
+
+  /* ---------------- layout ---------------- */
+  main{padding:18px 24px 60px; max-width:1920px; margin:0 auto}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:11px;box-shadow:0 1px 3px rgba(16,24,40,.04)}
+
+  /* KPI */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(158px,1fr));gap:12px;margin-bottom:16px}
+  .kpi{padding:14px 16px;position:relative;overflow:hidden}
+  .kpi .lbl{font-size:11.5px;color:var(--muted);font-weight:600;letter-spacing:.2px}
+  .kpi .val{font-size:25px;font-weight:700;margin-top:5px;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+  .kpi .sub{font-size:11px;color:var(--muted);margin-top:3px}
+  .kpi::after{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--brand)}
+  .kpi.g1::after{background:#1a7f37}.kpi.g2::after{background:#e8a33d}
+  .kpi.g3::after{background:#c62828}.kpi.g4::after{background:#546e7a}
+  .kpi.g5::after{background:#3949ab}
+
+  /* filters */
+  .filters{padding:14px 16px;margin-bottom:14px;display:flex;gap:10px;flex-direction:column}
+  .filter-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .filter-label{font-size:12.5px;color:var(--muted);font-weight:700;white-space:nowrap;min-width:60px}
+  .fld{display:flex;align-items:center;gap:6px}
+  .fld label{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap}
+  input[type=text],select{
+    font-family:inherit;font-size:12.5px;padding:7px 10px;border:1px solid var(--line);
+    border-radius:7px;background:#fbfcfe;color:var(--text);outline:none;transition:.15s;
+  }
+  input[type=text]{width:210px}
+  input[type=text]:focus,select:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(30,185,225,.13)}
+  select{max-width:190px;cursor:pointer}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{
+    padding:6px 13px;border-radius:20px;border:1px solid var(--line);background:#fbfcfe;
+    font-size:12px;cursor:pointer;color:var(--text2);font-weight:600;transition:.15s;user-select:none;
+  }
+  .chip:hover{border-color:var(--brand);color:var(--brand-dark)}
+  .chip.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .chip .c{opacity:.65;font-weight:500;margin-left:3px;font-size:11px}
+
+  /* table */
+  .tblwrap{overflow:auto;border-radius:11px;max-height:calc(100vh - 190px)}
+  table{border-collapse:separate;border-spacing:0;width:100%;min-width:1620px;background:#fff}
+  thead th{
+    position:sticky;top:0;z-index:20;background:var(--brand);color:#fff;
+    font-size:11.5px;font-weight:700;padding:10px 9px;text-align:center;
+    white-space:nowrap;border-right:1px solid rgba(255,255,255,.18);user-select:none;
+  }
+  thead th:last-child{border-right:0}
+  thead th.sortable{cursor:pointer}
+  thead th.sortable:hover{background:#17a8ce}
+  thead th .arw{opacity:.45;margin-left:3px;font-size:9px}
+  thead th.act .arw{opacity:1}
+  tbody td{
+    padding:8px 9px;border-bottom:1px solid var(--line-soft);font-size:12.5px;
+    text-align:center;white-space:nowrap;color:var(--text);
+  }
+  tbody tr:hover td{background:#f4fdff}
+  tbody td.l{text-align:left}
+  tbody td.name{max-width:250px;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+  tbody td.company{max-width:170px;overflow:hidden;text-overflow:ellipsis;color:var(--text2);font-size:12px}
+  tbody td.idx{color:var(--muted);font-size:11.5px;width:52px}
+  tbody td.code{font-variant-numeric:tabular-nums;color:var(--text2);letter-spacing:.2px}
+  .up{color:var(--up);font-weight:600}
+  .down{color:var(--down);font-weight:600}
+  .flat{color:var(--muted)}
+  .badge{display:inline-block;padding:3px 9px;border-radius:5px;font-size:11px;font-weight:700}
+  .badge.open{background:var(--ok);color:var(--ok-fg)}
+  .badge.limit{background:var(--warn);color:var(--warn-fg)}
+  .badge.stop{background:var(--stop);color:var(--stop-fg)}
+  .badge.gray{background:var(--gray);color:var(--gray-fg)}
+  .badge.blue{background:var(--blue);color:var(--blue-fg)}
+  .amtcell{display:flex;flex-direction:column;gap:3px;align-items:center}
+  .amtcell .a{font-weight:700;font-variant-numeric:tabular-nums}
+  .amtcell .a.big{color:#b26a00}
+  .amtcell .a.huge{color:#c62828}
+  .amtcell .a.none{color:var(--muted);font-weight:500;font-size:11.5px}
+  .bar{width:74px;height:4px;background:var(--line-soft);border-radius:3px;overflow:hidden}
+  .bar i{display:block;height:100%;background:linear-gradient(90deg,#ffd08a,#e8a33d);border-radius:3px}
+  .bar.g i{background:linear-gradient(90deg,#8ee0b0,#1a7f37)}
+
+  .footbar{display:flex;align-items:center;gap:14px;padding:12px 16px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+  .footbar .sp{flex:1}
+  .pager{display:flex;gap:5px;align-items:center}
+  .pager button{
+    min-width:30px;height:30px;border:1px solid var(--line);background:#fff;border-radius:7px;
+    cursor:pointer;font-family:inherit;font-size:12px;color:var(--text2);transition:.15s;
+  }
+  .pager button:hover:not(:disabled){border-color:var(--brand);color:var(--brand-dark)}
+  .pager button.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:700}
+  .pager button:disabled{opacity:.4;cursor:not-allowed}
+  .pager .info{padding:0 8px;color:var(--muted)}
+
+  .empty{padding:70px 20px;text-align:center;color:var(--muted);font-size:13px}
+  .toast{
+    position:fixed;right:22px;bottom:22px;z-index:200;background:#1f2937;color:#fff;
+    padding:12px 18px;border-radius:9px;font-size:12.5px;box-shadow:0 8px 26px rgba(0,0,0,.22);
+    opacity:0;transform:translateY(14px);transition:.28s;pointer-events:none;max-width:420px;
+  }
+  .toast.show{opacity:1;transform:translateY(0)}
+  .note{
+    margin-top:14px;padding:12px 16px;font-size:11.8px;color:var(--muted);line-height:1.75;
+    background:#fafbfd;border:1px dashed var(--line);border-radius:10px;
+  }
+  .note b{color:var(--text2)}
+  ::-webkit-scrollbar{width:11px;height:11px}
+  ::-webkit-scrollbar-thumb{background:#cfd7e2;border-radius:6px;border:3px solid var(--bg)}
+  ::-webkit-scrollbar-thumb:hover{background:#b6c0cd}
+  ::-webkit-scrollbar-track{background:transparent}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hd-row">
+    <div>
+      <div class="hd-title"><span class="dot"></span>QDII 海外额度宝 · 单日申购额度排行</div>
+      <div class="hd-sub">数据源：天天基金移动端接口 · QDII 基金全集</div>
+    </div>
+    <div class="hd-spacer"></div>
+    <div class="hd-meta">
+      <div class="item"><span class="k">数据更新时间</span><span class="v" id="m-updated">—</span></div>
+      <div class="item"><span class="k">下次自动同步</span><span class="v" id="m-next">—</span></div>
+      <div class="item"><span class="k">同步计划</span><span class="v" id="m-plan">每日 08:30</span></div>
+    </div>
+    <span class="pill" id="m-pill">加载中…</span>
+    <button class="btn" id="btn-sync">立即同步</button>
+    <button class="btn ghost" id="btn-xlsx">下载 Excel</button>
+  </div>
+</header>
+
+<main>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card filters">
+    <div class="filter-row">
+      <span class="filter-label">QDII类型</span>
+      <div class="chips" id="chips-type"></div>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">主投区域</span>
+      <div class="chips" id="chips-region"></div>
+    </div>
+    <div class="filter-row" style="margin-top:4px">
+      <div class="fld">
+        <label>搜索</label>
+        <input type="text" id="q" placeholder="基金代码 / 名称 / 基金公司">
+      </div>
+      <div class="fld">
+        <label>单日申购上限</label>
+        <select id="f-amount">
+          <option value="">全部</option>
+          <option value="100000">10万以上</option>
+          <option value="10000">1万以上</option>
+          <option value="1000">1000以上</option>
+        </select>
+      </div>
+      <button class="btn" id="btn-reset" style="background:#f1f4f8;color:#4b5563">重置筛选</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="tblwrap">
+      <table>
+        <thead>
+          <tr id="thead"></tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="empty" style="display:none">没有符合条件的基金</div>
+    </div>
+    <div class="footbar">
+      <span>共 <b id="f-count">0</b> 只 / 全量 <b id="t-count">0</b> 只</span>
+      <span class="sp"></span>
+      <div class="fld">
+        <label>每页</label>
+        <select id="pagesize">
+          <option>50</option><option selected>100</option><option>200</option><option value="99999">全部</option>
+        </select>
+      </div>
+      <div class="pager" id="pager"></div>
+    </div>
+  </div>
+
+  <div class="note">
+    <b>说明：</b>
+    ① 额度为天天基金披露的<b>单日累计申购上限</b>，仅代表天天基金代销渠道，银行/券商/直销渠道可能不同；
+    ② 标记「限大额（未披露额度）」的多为美元现汇/现钞份额，天天基金不代销，故不披露具体金额；
+    ③「主要投资区域」按基金名称关键词推断，非官方分类口径；
+    ④ 页面每 5 秒自动检测数据更新，服务端每日 <b id="note-plan">08:30</b> 自动同步一次。
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+window.__EMBEDDED__ = null; /*__EMBED_DATA__*/
+</script>
+<script>
+/* ============================ 基础 ============================ */
+const $ = id => document.getElementById(id);
+let ALL = [];            // 全量数据
+let VIEW = [];           // 过滤排序后
+let PAGE = 1;
+let MODE = 'live';       // live | static
+let LAST_TS = null;
+let typeFilter = '';   // QDII类型 tab
+let regionFilter = ''; // 主投区域 tab
+let sortKey = 'limit_val', sortDir = 'desc';
+let syncTimer = null;
+
+const COLS = [
+  {k:'_idx',      t:'排名',          w:52,  sortable:false, cls:'idx'},
+  {k:'code',      t:'基金代码',      w:80,  sortable:true,  cls:'code'},
+  {k:'name',      t:'基金名称',      w:250, sortable:true,  cls:'l name'},
+  {k:'ftype',     t:'类型',          w:130, sortable:true,  cls:''},
+  {k:'region',    t:'主要投资区域',  w:118, sortable:true,  cls:''},
+  {k:'region_internal', t:'主投区域(内部)', w:120, sortable:true, cls:''},
+  {k:'limit_val', t:'单日申购上限',  w:140, sortable:true,  cls:''},
+  {k:'status',    t:'申购状态',      w:96,  sortable:true,  cls:''},
+  {k:'ret_1d',    t:'日涨跌',        w:82,  sortable:true,  cls:''},
+  {k:'ret_1m',    t:'近1月',         w:82,  sortable:true,  cls:''},
+  {k:'ret_1n',    t:'近1年',         w:84,  sortable:true,  cls:''},
+  {k:'ret_ytd',   t:'今年来',        w:82,  sortable:true,  cls:''},
+  {k:'nav',       t:'单位净值',      w:82,  sortable:true,  cls:''},
+  {k:'nav_date',  t:'净值日期',      w:96,  sortable:true,  cls:'code'},
+  {k:'company',   t:'基金公司',      w:170, sortable:true,  cls:'l company'},
+  {k:'size',      t:'规模(亿元)',    w:92,  sortable:true,  cls:''}
+];
+
+const STATUS_CLS = {'开放申购':'open','限大额':'limit','暂停申购':'stop','封闭期':'gray','场内交易':'blue','认购期':'blue'};
+
+/* ============================ 工具 ============================ */
+function fmtAmt(v){
+  if(v===null||v===undefined||v==='') return null;
+  v = Number(v);
+  if(!isFinite(v)) return null;
+  if(v >= 100000000) return (v/100000000).toFixed(2).replace(/\.?0+$/,'') + ' 亿';
+  if(v >= 10000)     return (v/10000).toFixed(v % 10000 === 0 ? 0 : 1).replace(/\.0$/,'') + ' 万';
+  return v.toFixed(0) + ' 元';
+}
+function amtClass(v){
+  if(v===null||v===undefined) return 'none';
+  v = Number(v);
+  if(v >= 10000000) return 'huge';
+  if(v >= 1000000)  return 'big';
+  return '';
+}
+function pct(v){
+  if(v===null||v===undefined||v==='') return '<span class="flat">—</span>';
+  const n = Number(v);
+  if(!isFinite(n)) return '<span class="flat">—</span>';
+  const c = n > 0 ? 'up' : (n < 0 ? 'down' : 'flat');
+  const s = (n>0?'+':'') + n.toFixed(2) + '%';
+  return `<span class="${c}">${s}</span>`;
+}
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+}
+function toast(msg, ms=3200){
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._tm);
+  t._tm = setTimeout(()=>t.classList.remove('show'), ms);
+}
+function barPct(v, max){
+  if(!v || !max) return 0;
+  // 额度跨度从 10 元到 5000 万，用对数刻度
+  return Math.max(3, Math.min(100, Math.log10(v+1)/Math.log10(max+1)*100));
+}
+
+/* ============================ 渲染 ============================ */
+function mapRegionTab(region){
+  /* 已由后端计算好 region_tab，直接使用 */
+  return region || '其他';
+}
+
+function renderHead(){
+  const tr = $('thead');
+  tr.innerHTML = COLS.map(c=>{
+    const act = sortKey===c.k ? ' act' : '';
+    const arw = !c.sortable ? '' : (sortKey===c.k ? (sortDir==='desc'?'▼':'▲') : '⇅');
+    return `<th class="sortable${act}" data-k="${c.k}" style="min-width:${c.w}px">
+      ${esc(c.t)}<span class="arw">${arw}</span></th>`;
+  }).join('');
+  tr.querySelectorAll('th').forEach(th=>{
+    th.onclick = ()=>{
+      const k = th.dataset.k;
+      if(!COLS.find(c=>c.k===k).sortable) return;
+      if(sortKey===k){ sortDir = sortDir==='desc'?'asc':'desc'; }
+      else { sortKey = k; sortDir = (k==='limit_val') ? 'desc' : (k==='name'||k==='code'?'asc':'desc'); }
+      PAGE = 1;
+      renderHead(); apply();
+    };
+  });
+}
+
+function rowHtml(r, i){
+  const lv = r.limit_val;
+  const maxAmt = window.__maxAmt || 1;
+  let amt;
+  if(lv !== null && lv !== undefined){
+    amt = `<div class="amtcell">
+             <span class="a ${amtClass(lv)}">${fmtAmt(lv)}</span>
+             <div class="bar${lv>=1000000?' g':''}"><i style="width:${barPct(lv,maxAmt)}%"></i></div>
+           </div>`;
+  } else {
+    amt = `<div class="amtcell"><span class="a none">${esc(r.limit_txt||'—')}</span></div>`;
+  }
+  const st = STATUS_CLS[r.status] || 'gray';
+  return `<tr>
+    <td class="idx">${i}</td>
+    <td class="code">${esc(r.code)}</td>
+    <td class="l name" title="${esc(r.name)}">${esc(r.name)}</td>
+    <td>${esc(r.ftype)}</td>
+    <td>${esc(r.region)}</td>
+    <td>${esc(r.region_internal)||'—'}</td>
+    <td>${amt}</td>
+    <td><span class="badge ${st}">${esc(r.status)}</span></td>
+    <td>${pct(r.ret_1d)}</td>
+    <td>${pct(r.ret_1m)}</td>
+    <td>${pct(r.ret_1n)}</td>
+    <td>${pct(r.ret_ytd)}</td>
+    <td class="num">${esc(r.nav)||'—'}</td>
+    <td class="code">${esc(r.nav_date)||'—'}</td>
+    <td class="l company" title="${esc(r.company)}">${esc(r.company)||'—'}</td>
+    <td class="num">${r.size==null?'—':Number(r.size).toFixed(2)}</td>
+  </tr>`;
+}
+
+function apply(){
+  const q = $('q').value.trim().toLowerCase();
+  const am = $('f-amount').value;
+
+  VIEW = ALL.filter(r=>{
+    if(typeFilter){
+      const cat = r.qdii_cat || '其他';
+      if(cat !== typeFilter) return false;
+    }
+    if(regionFilter){
+      const reg = mapRegionTab(r.region_tab);
+      if(regionFilter === '其他'){
+        if(['美国','欧洲','新兴市场','大中华'].includes(reg)) return false;
+      } else {
+        if(reg !== regionFilter) return false;
+      }
+    }
+    // 单日申购上限筛选
+    if(am){
+      const lv = r.limit_val;
+      if(lv === null || lv === undefined){
+        return false; // 没有额度的不匹配任何阈值
+      }
+      if(lv < parseFloat(am)) return false;
+    }
+    if(q){
+      const hay = (r.code+' '+r.name+' '+r.company+' '+r.region+' '+r.ftype+' '+(r.qdii_cat||'')).toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  const dir = sortDir==='desc' ? -1 : 1;
+  VIEW.sort((a,b)=>{
+    let x = a[sortKey], y = b[sortKey];
+    if(sortKey==='limit_val'){
+      const ax = (x===null||x===undefined) ? -1 : x;
+      const ay = (y===null||y===undefined) ? -1 : y;
+      if(a.status==='暂停申购' && b.status!=='暂停申购') return 1;
+      if(b.status==='暂停申购' && a.status!=='暂停申购') return -1;
+      return (ax-ay)*dir;
+    }
+    if(typeof x === 'number' || typeof y === 'number'){
+      x = (x===null||x===undefined||isNaN(x)) ? -Infinity : Number(x);
+      y = (y===null||y===undefined||isNaN(y)) ? -Infinity : Number(y);
+      return (x-y)*dir;
+    }
+    x = x==null ? '' : String(x); y = y==null ? '' : String(y);
+    return x.localeCompare(y,'zh')*dir;
+  });
+
+  $('f-count').textContent = VIEW.length;
+  const ps = parseInt($('pagesize').value,10);
+  const pages = Math.max(1, Math.ceil(VIEW.length/ps));
+  if(PAGE > pages) PAGE = pages;
+  const start = (PAGE-1)*ps;
+  const pageRows = VIEW.slice(start, start+ps);
+
+  $('tbody').innerHTML = pageRows.map((r,i)=>rowHtml(r, start+i+1)).join('');
+  $('empty').style.display = VIEW.length ? 'none' : 'block';
+
+  // 分页
+  const pg = $('pager');
+  let h = `<button ${PAGE<=1?'disabled':''} data-p="1">«</button>`;
+  h += `<button ${PAGE<=1?'disabled':''} data-p="${PAGE-1}">‹</button>`;
+  const win = [];
+  for(let p=Math.max(1,PAGE-2); p<=Math.min(pages,PAGE+2); p++) win.push(p);
+  win.forEach(p=> h += `<button data-p="${p}" class="${p===PAGE?'on':''}">${p}</button>`);
+  h += `<button ${PAGE>=pages?'disabled':''} data-p="${PAGE+1}">›</button>`;
+  h += `<button ${PAGE>=pages?'disabled':''} data-p="${pages}">»</button>`;
+  h += `<span class="info">${PAGE}/${pages}</span>`;
+  pg.innerHTML = h;
+  pg.querySelectorAll('button[data-p]').forEach(b=>{
+    b.onclick = ()=>{ PAGE = parseInt(b.dataset.p,10); apply(); document.querySelector('.tblwrap').scrollTop = 0; };
+  });
+}
+
+function renderKpis(st){
+  const cards = [
+    {cls:'',   lbl:'QDII 基金总数',   val:st.total||0,        sub:'全部份额'},
+    {cls:'g1', lbl:'开放申购（不限购）', val:st.open_count||0, sub:'可自由申购'},
+    {cls:'g2', lbl:'限大额',          val:st.limit_count||0,  sub:`其中 ${st.undisclosed||0} 只未披露额度`},
+    {cls:'g3', lbl:'暂停申购',        val:st.pause_count||0,  sub:'当前不可申购'},
+    {cls:'g4', lbl:'封闭期 / 场内 / 认购', val:st.other_count||0, sub:'非场外申赎'},
+    {cls:'g5', lbl:'最高单日额度',    val:fmtAmt(st.max_amount)||'—', sub:'限大额基金中最高'}
+  ];
+  $('kpis').innerHTML = cards.map(c=>`
+    <div class="card kpi ${c.cls}">
+      <div class="lbl">${c.lbl}</div>
+      <div class="val">${c.val}</div>
+      <div class="sub">${c.sub}</div>
+    </div>`).join('');
+}
+
+function renderFilters(){
+  const companies = new Set();
+  const cType = {}, cRegion = {};
+  ALL.forEach(r=>{
+    if(r.company) companies.add(r.company);
+    // QDII类型 tab 数据
+    const cat = r.qdii_cat || '其他';
+    cType[cat] = (cType[cat]||0)+1;
+    // 主投区域 tab：使用后端计算的 region_tab
+    const reg = mapRegionTab(r.region_tab);
+    cRegion[reg] = (cRegion[reg]||0)+1;
+  });
+  // QDII类型 tab
+  const typeOrder = ['QDII-主动权益','QDII-被动权益','QDII纯债','QDII商品','其他'];
+  const typeKeys = typeOrder.filter(k=>cType[k]).concat(Object.keys(cType).filter(k=>!typeOrder.includes(k)));
+  $('chips-type').innerHTML = `<span class="chip on" data-t="">全部<span class="c">${ALL.length}</span></span>` +
+    typeKeys.map(k=>`<span class="chip" data-t="${esc(k)}">${esc(k)}<span class="c">${cType[k]}</span></span>`).join('');
+  $('chips-type').querySelectorAll('.chip').forEach(ch=>{
+    ch.onclick = ()=>{
+      typeFilter = ch.dataset.t;
+      $('chips-type').querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+      ch.classList.add('on');
+      PAGE = 1; apply();
+    };
+  });
+  // 主投区域 tab（基于内部区域）
+  const regionOrder = ['美国','欧洲','新兴市场','大中华'];
+  const regionKeys = regionOrder.filter(k=>cRegion[k]);
+  // 补上不在4个选项中的
+  const extraRegions = Object.keys(cRegion).filter(k=>!regionOrder.includes(k));
+  if(extraRegions.length) regionKeys.push('其他');
+  const regionDisplay = k => k === '其他' ? '其他' : k;
+  $('chips-region').innerHTML = `<span class="chip on" data-r="">全部<span class="c">${ALL.length}</span></span>` +
+    regionKeys.map(k=>{
+      const cnt = k==='其他' ? extraRegions.reduce((s,r)=>s+cRegion[r],0) : cRegion[k];
+      return `<span class="chip" data-r="${esc(k)}">${esc(regionDisplay(k))}<span class="c">${cnt}</span></span>`;
+    }).join('');
+  $('chips-region').querySelectorAll('.chip').forEach(ch=>{
+    ch.onclick = ()=>{
+      regionFilter = ch.dataset.r;
+      $('chips-region').querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+      ch.classList.add('on');
+      PAGE = 1; apply();
+    };
+  });
+}
+
+function setData(d, keepPage){
+  ALL = d.items || [];
+  window.__maxAmt = Math.max(...ALL.filter(r=>r.limit_val!=null).map(r=>r.limit_val), 1);
+  $('t-count').textContent = ALL.length;
+  renderKpis(d.stats||{});
+  renderFilters();
+  if(!keepPage) PAGE = 1;
+  apply();
+}
+
+/* ============================ 数据加载 & 自动刷新 ============================ */
+async function bootstrap(){
+  if(window.__EMBEDDED__){
+    MODE = 'static';
+    LAST_TS = window.__EMBEDDED__.updated_at;
+    setData(window.__EMBEDDED__, false);
+    $('m-updated').textContent = LAST_TS || '—';
+    $('m-next').textContent = '离线快照';
+    $('m-plan').textContent = '静态文件（不自动同步）';
+    $('note-plan').textContent = '（离线快照不会自动同步）';
+    $('btn-sync').disabled = true;
+    $('btn-sync').textContent = '离线快照';
+    $('m-pill').className = 'pill live';
+    $('m-pill').textContent = '离线快照模式';
+    return;
+  }
+  try{
+    const [meta, data] = await Promise.all([
+      fetch('api/meta').then(r=>r.json()),
+      fetch('api/data').then(r=>r.json())
+    ]);
+    applyMeta(meta);
+    LAST_TS = data.updated_at;
+    setData(data, false);
+  }catch(e){
+    $('m-pill').textContent = '无法连接服务端';
+    toast('无法连接服务端，请确认 app.py 已启动');
+    return;
+  }
+  syncTimer = setInterval(pollMeta, 5000);
+}
+
+function applyMeta(m){
+  $('m-updated').textContent = m.updated_at || '暂无数据';
+  $('m-next').textContent = m.next_sync || '—';
+  if(m.interval_hint){
+    $('m-plan').textContent = m.interval_hint;
+    $('note-plan').textContent = m.interval_hint.replace('每日 ','');
+  }
+  const pill = $('m-pill');
+  if(m.syncing){
+    pill.className = 'pill';
+    pill.innerHTML = '<span class="spin"></span> 正在同步…';
+    $('btn-sync').disabled = true;
+    $('btn-sync').textContent = '同步中…';
+  } else {
+    pill.className = 'pill live';
+    pill.textContent = m.last_result ? ('同步' + m.last_result) : '自动同步已开启';
+    $('btn-sync').disabled = false;
+    $('btn-sync').textContent = '立即同步';
+  }
+  if(m.syncing && m.progress) pill.innerHTML = '<span class="spin"></span> ' + m.progress.slice(0, 46);
+}
+
+async function pollMeta(){
+  try{
+    const m = await fetch('api/meta').then(r=>r.json());
+    const was = $('m-pill').textContent;
+    applyMeta(m);
+    if(!m.syncing && was.indexOf('正在同步') >= 0){
+      toast('数据同步完成，页面已刷新');
+    }
+    if(m.updated_at && m.updated_at !== LAST_TS){
+      LAST_TS = m.updated_at;
+      const d = await fetch('api/data').then(r=>r.json());
+      setData(d, true);
+    }
+  }catch(e){ /* 忽略单次失败 */ }
+}
+
+/* ============================ 事件 ============================ */
+$('btn-sync').onclick = async ()=>{
+  $('btn-sync').disabled = true;
+  $('btn-sync').textContent = '同步中…';
+  $('m-pill').innerHTML = '<span class="spin"></span> 正在同步…';
+  try{
+    const r = await fetch('api/sync', {method:'POST'}).then(r=>r.json());
+    toast(r.msg || '已触发同步');
+    if(!r.ok) { /* 已在同步 */ }
+  }catch(e){ toast('触发同步失败：' + e); }
+};
+$('btn-xlsx').onclick = ()=>{
+  if(MODE === 'static'){
+    /* 离线快照模式：前端直接生成 Excel */
+    exportXlsx();
+  } else {
+    window.location.href = 'download/xlsx';
+  }
+};
+
+function exportXlsx(){
+  const rows = ALL;
+  if(!rows.length){ toast('没有数据可导出'); return; }
+  const headers = ['排名','基金代码','基金名称','类型','QDII类型','主要投资区域','主投区域(内部)','单日申购上限(元)','额度显示','申购状态','日涨跌(%)','近1月(%)','近1年(%)','今年来(%)','单位净值','净值日期','基金公司','规模(亿元)','申购状态原文'];
+  const csv = [headers.join(',')];
+  rows.forEach((r,i)=>{
+    const vals = [
+      i+1, r.code, '"'+(r.name||'').replace(/"/g,'""')+'"', '"'+(r.ftype||'').replace(/"/g,'""')+'"',
+      '"'+(r.qdii_cat||'').replace(/"/g,'""')+'"', '"'+(r.region||'').replace(/"/g,'""')+'"',
+      '"'+(r.region_internal||'').replace(/"/g,'""')+'"',
+      r.limit_val||'', '"'+(r.limit_txt||'').replace(/"/g,'""')+'"', '"'+(r.status||'').replace(/"/g,'""')+'"',
+      r.ret_1d||'', r.ret_1m||'', r.ret_1n||'', r.ret_ytd||'',
+      '"'+(r.nav||'').replace(/"/g,'""')+'"', '"'+(r.nav_date||'').replace(/"/g,'""')+'"',
+      '"'+(r.company||'').replace(/"/g,'""')+'"', r.size||'', '"'+(r.sgzt_raw||'').replace(/"/g,'""')+'"'
+    ];
+    csv.push(vals.join(','));
+  });
+  /* 加 UTF-8 BOM 防止 Excel 乱码 */
+  const blob = new Blob(['\uFEFF' + csv.join('\n')], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'QDII额度排行_' + (LAST_TS||'').replace(/[: ]/g,'') + '.csv';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('已导出 ' + rows.length + ' 条数据');
+}
+$('btn-reset').onclick = ()=>{
+  $('q').value = '';
+  $('f-amount').value = '';
+  typeFilter = ''; regionFilter = '';
+  $('chips-type').querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+  $('chips-type').querySelector('.chip[data-t=""]').classList.add('on');
+  $('chips-region').querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+  $('chips-region').querySelector('.chip[data-r=""]').classList.add('on');
+  sortKey='limit_val'; sortDir='desc'; PAGE=1;
+  renderHead(); apply();
+};
+let qt;
+$('q').oninput = ()=>{ clearTimeout(qt); qt = setTimeout(()=>{PAGE=1;apply();}, 220); };
+['f-amount'].forEach(id=>{
+  $(id).onchange = ()=>{ PAGE=1; apply(); };
+});
+$('pagesize').onchange = ()=>{ PAGE=1; apply(); };
+
+renderHead();
+bootstrap();
+</script>
+</body>
+</html>
