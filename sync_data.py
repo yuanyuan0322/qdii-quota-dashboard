@@ -69,6 +69,21 @@ def log(msg: str) -> None:
     print(f"[{datetime.now():%H:%M:%S}] {msg}", flush=True)
 
 
+BAD_RESPONSE_LOG = os.path.join(HERE, "_bad_response.log")
+MIN_UNIVERSE = int(os.environ.get("QDII_MIN_UNIVERSE", "600"))   # 全集健康下限
+MIN_ROWS = int(os.environ.get("QDII_MIN_ROWS", "500"))           # 入库健康下限
+
+
+def save_bad(tag: str, text: str | None) -> None:
+    """把异常响应落盘，便于事后定位（只保留最近若干条）"""
+    try:
+        with open(BAD_RESPONSE_LOG, "a", encoding="utf-8") as f:
+            f.write(f"\n===== {datetime.now():%Y-%m-%d %H:%M:%S} | {tag} =====\n")
+            f.write(((text or "")[:800]).replace("\r", " ").replace("\n", " ") + "\n")
+    except Exception:
+        pass
+
+
 def fetch(url: str, retry: int = 3, timeout: int = 15):
     for i in range(retry):
         try:
@@ -82,36 +97,102 @@ def fetch(url: str, retry: int = 3, timeout: int = 15):
     return None
 
 
+def parse_json(text: str | None):
+    """宽松解析：剥离 BOM/空白，区分各类异常。返回 (obj, err)"""
+    if text is None:
+        return None, "请求失败"
+    t = (text or "").lstrip("\ufeff").strip()
+    if not t:
+        return None, "响应为空"
+    if t[0] not in "{[":
+        return None, f"非JSON响应(head={t[:40]!r})"
+    try:
+        j = json.loads(t)
+    except Exception as e:
+        return None, f"JSON解析错误({e})"
+    if not isinstance(j, dict):
+        return None, f"顶层非对象(type={type(j).__name__}, val={str(j)[:40]!r})"
+    return j, None
+
+
 # --------------------------------------------------------------------------- #
 # 取数
 # --------------------------------------------------------------------------- #
-def get_qdii_universe() -> list:
-    """分页拉取 QDII 基金全集"""
-    out, page = [], 1
-    while True:
-        u = (f"{BASE}/FundMNewApi/FundMNRank?FundType=6&SortColumn=SYL_1N&Sort=desc"
-             f"&pageIndex={page}&pageSize=30&plat=Android&appType=ttjj&product=EFund"
-             f"&Version=1&deviceid=Wap&_={int(time.time() * 1000)}")
-        d = fetch(u)
-        if not d:
-            log(f"  第 {page} 页请求失败，停止")
-            break
-        try:
-            j = json.loads(d)
-        except Exception:
-            log(f"  第 {page} 页解析失败")
-            break
-        ds = j.get("Datas") or []
+def _rank_page(page: int):
+    """抓取单页，返回 (datas, total, err)"""
+    u = (f"{BASE}/FundMNewApi/FundMNRank?FundType=6&SortColumn=SYL_1N&Sort=desc"
+         f"&pageIndex={page}&pageSize=30&plat=Android&appType=ttjj&product=EFund"
+         f"&Version=1&deviceid=Wap&_={int(time.time() * 1000)}")
+    d = fetch(u)
+    j, err = parse_json(d)
+    if err:
+        save_bad(f"rank page {page}", d)
+        return [], 0, err
+    return (j.get("Datas") or []), int(j.get("TotalCount") or 0), None
+
+
+def _paged_once() -> tuple:
+    """单轮完整分页抓取，返回 (list, err)"""
+    out, page, total = [], 1, 0
+    while page <= 40:
+        ds, tc, err = _rank_page(page)
+        if err:
+            # 单页异常再试 2 次（接口偶发返回 null/HTML/风控页）
+            for _ in range(2):
+                time.sleep(1.5)
+                ds, tc, err = _rank_page(page)
+                if not err:
+                    break
+            if err:
+                return out, f"第 {page} 页 {err}"
+        total = tc or total
         if not ds:
             break
         out.extend(ds)
-        total = j.get("TotalCount") or 0
         log(f"  第 {page} 页 +{len(ds)}（累计 {len(out)}/{total}）")
-        if len(out) >= total or len(ds) < 30:
+        if (total and len(out) >= total) or len(ds) < 30:
             break
         page += 1
         time.sleep(0.3)
-    return out
+    return out, None
+
+
+def _prev_universe() -> list:
+    """兜底：上一次成功抓取的全集"""
+    try:
+        if os.path.exists(UNIVERSE_JSON):
+            u = json.load(open(UNIVERSE_JSON, encoding="utf-8"))
+            if isinstance(u, list) and len(u) >= MIN_UNIVERSE:
+                return u
+    except Exception:
+        pass
+    return []
+
+
+def get_qdii_universe(rounds: int = 3) -> tuple:
+    """分页拉取 QDII 基金全集。返回 (list, source)
+    source: live=实时抓取 / fallback=复用上次全集 / fail=彻底失败
+    """
+    last_err = ""
+    for r in range(rounds):
+        out, err = _paged_once()
+        if err or len(out) < MIN_UNIVERSE:
+            last_err = err or f"仅 {len(out)} 只（<{MIN_UNIVERSE}）"
+            log(f"  全集第 {r + 1}/{rounds} 轮异常：{last_err}")
+            if r < rounds - 1:
+                wait = 20 * (r + 1)
+                log(f"  {wait}s 后重试…")
+                time.sleep(wait)
+            continue
+        log(f"  全集抓取成功：{len(out)} 只")
+        return out, "live"
+
+    fb = _prev_universe()
+    if fb:
+        log(f"  实时全集不可用（{last_err}），复用上次全集 {len(fb)} 只继续抓明细")
+        return fb, "fallback"
+    log(f"  全集抓取失败且无可用兜底：{last_err}")
+    return [], "fail"
 
 
 def get_detail(code: str) -> dict:
@@ -322,6 +403,7 @@ def main():
     t0 = time.time()
     os.makedirs(DATA_DIR, exist_ok=True)
 
+    uni_src = "reuse"
     if args.reuse_raw:
         if not os.path.exists(RAW_JSON):
             log("缺少 _quota_raw.json，无法复用")
@@ -337,9 +419,12 @@ def main():
             log(f"复用已有原始数据：{len(universe)} 只（无 universe，YTD 可能缺失）")
     else:
         log("步骤 1/4：拉取 QDII 基金全集…")
-        universe = get_qdii_universe()
+        universe, uni_src = get_qdii_universe()
         codes = list(dict.fromkeys([r.get("FCODE") for r in universe if r.get("FCODE")]))
-        log(f"QDII 基金全集：{len(codes)} 只")
+        log(f"QDII 基金全集：{len(codes)} 只（来源：{uni_src}）")
+        if not codes:
+            log("！全集为空，放弃本次同步（保留上一次数据）")
+            sys.exit(2)
 
         log(f"步骤 2/4：抓取申购状态与单日额度（{args.workers} 并发）…")
         details = fetch_all_details(codes, workers=args.workers)
@@ -362,16 +447,32 @@ def main():
         if region_map:
             json.dump(region_map, open(REGION_INTERNAL_JSON, "w", encoding="utf-8"), ensure_ascii=False)
     rows = build_records(details, universe, region_map)
+
+    # ---- 数据健康校验：异常结果绝不覆盖上一次的好数据 ----
+    prev_total = 0
+    try:
+        if os.path.exists(WEB_JSON):
+            prev_total = len(json.load(open(WEB_JSON, encoding="utf-8")).get("items") or [])
+    except Exception:
+        prev_total = 0
+    if len(rows) < MIN_ROWS or (prev_total and len(rows) < prev_total * 0.8):
+        log(f"！数据异常：本次 {len(rows)} 条（上次 {prev_total} 条，下限 {MIN_ROWS}），"
+            f"放弃写入，保留上一次数据")
+        save_bad(f"rows too few: {len(rows)} vs {prev_total}", "")
+        sys.exit(3)
+
     stats = build_stats(rows)
     updated = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     data = {
         "updated_at": updated,
         "updated_date": updated[:10],
         "source": "天天基金移动端接口 fundmobapi.eastmoney.com",
-        "universe": "QDII 基金全集（FundType=6）",
+        "universe": ("QDII 基金全集（FundType=6）" if uni_src == "live"
+                     else "QDII 基金全集（复用上次代码表，实时抓取失败）"),
         "stats": stats,
         "items": rows,
     }
+
     json.dump(data, open(WEB_JSON, "w", encoding="utf-8"), ensure_ascii=False)
     log(f"看板数据已保存：{WEB_JSON}（{len(rows)} 条）")
 

@@ -35,6 +35,9 @@ PORT = int(os.environ.get("QDII_PORT", "5001"))
 SYNC_HOUR = int(os.environ.get("QDII_SYNC_HOUR", "8"))
 SYNC_MINUTE = int(os.environ.get("QDII_SYNC_MINUTE", "30"))
 STALE_HOURS = float(os.environ.get("QDII_STALE_HOURS", "20"))
+MIN_ROWS = int(os.environ.get("QDII_MIN_ROWS", "500"))     # 低于此值视为同步失败
+RETRY_MAX = int(os.environ.get("QDII_RETRY_MAX", "3"))     # 当天失败最多自动重试次数
+RETRY_GAP_MIN = int(os.environ.get("QDII_RETRY_GAP", "20"))  # 重试间隔（分钟）
 
 app = Flask(__name__)
 app.config["JSON_AS_ASCII"] = False
@@ -48,6 +51,9 @@ _state = {
     "log_tail": [],
 }
 _lock = threading.Lock()
+
+# 当天自动同步的重试状态（避免失败后就一直躺到第二天，也避免 30s 疯狂重试）
+_retry = {"date": None, "count": 0, "next_at": None, "attempted_date": None}
 
 
 # --------------------------------------------------------------------------- #
@@ -97,6 +103,7 @@ def run_sync(reason: str = "manual") -> bool:
         if _state["syncing"]:
             return False
         _state["syncing"] = True
+        _retry["attempted_date"] = datetime.now().strftime("%Y-%m-%d")
         _state["progress"] = "启动同步…"
         _state["last_start"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         _state["log_tail"] = []
@@ -127,12 +134,38 @@ def run_sync(reason: str = "manual") -> bool:
         except Exception as e:
             append_log(f"同步异常：{e}")
         finally:
+            ok = (rc == 0) and (len(load_data().get("items") or []) >= MIN_ROWS)
             with _lock:
                 _state["syncing"] = False
-                _state["last_result"] = "成功" if rc == 0 else f"失败(rc={rc})"
+                if ok:
+                    _state["last_result"] = "成功"
+                    _state["progress"] = "同步完成"
+                elif rc != 0:
+                    _state["last_result"] = f"失败(rc={rc})"
+                    _state["progress"] = f"同步失败(rc={rc})，保留上一次数据"
+                else:
+                    _state["last_result"] = "失败(数据条数异常)"
+                    _state["progress"] = "数据量异常，保留上一次数据"
                 _state["last_finish"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                _state["progress"] = "同步完成" if rc == 0 else _state["progress"]
-            append_log(f"===== 同步结束 rc={rc} =====")
+            append_log(f"===== 同步结束 rc={rc}（{'成功' if ok else '失败'}）=====")
+
+            # 失败则排一次自动重试（同一天内最多 RETRY_MAX 次）
+            if not ok:
+                today = datetime.now().strftime("%Y-%m-%d")
+                with _lock:
+                    if _retry["date"] != today:
+                        _retry.update({"date": today, "count": 0})
+                    if _retry["count"] < RETRY_MAX:
+                        _retry["count"] += 1
+                        _retry["next_at"] = datetime.now() + timedelta(minutes=RETRY_GAP_MIN)
+                        append_log(f"已排定第 {_retry['count']} 次自动重试："
+                                   f"{_retry['next_at']:%H:%M}")
+                    else:
+                        _retry["next_at"] = None
+                        append_log(f"当天重试次数已用尽（{RETRY_MAX} 次），等待次日定时同步")
+            else:
+                with _lock:
+                    _retry["next_at"] = None
 
     threading.Thread(target=worker, name="sync-worker", daemon=True).start()
     return True
@@ -148,7 +181,18 @@ def scheduler_loop():
             now = datetime.now()
             today = now.strftime("%Y-%m-%d")
             target = now.replace(hour=SYNC_HOUR, minute=SYNC_MINUTE, second=0, microsecond=0)
-            if now >= target and last_date != today and not _state["syncing"]:
+
+            with _lock:
+                pending = _retry.get("next_at")
+                attempted = _retry.get("attempted_date")
+                syncing = _state["syncing"]
+            if syncing:
+                pass
+            elif pending and now >= pending:
+                append_log(f"自动重试触发（第 {_retry['count']}/{RETRY_MAX} 次）")
+                run_sync("retry")
+            elif (now >= target and last_date != today
+                  and attempted != today):   # 当天定时只触发一次，其余交给重试机制
                 append_log(f"定时任务触发（每日 {SYNC_HOUR:02d}:{SYNC_MINUTE:02d}）")
                 run_sync("scheduled")
         except Exception as e:
@@ -191,6 +235,9 @@ def api_meta():
         "last_finish": _state["last_finish"],
         "log_tail": _state["log_tail"][-12:],
         "age_hours": data_age_hours(),
+        "next_retry": (_retry["next_at"].strftime("%Y-%m-%d %H:%M")
+                       if _retry.get("next_at") else None),
+        "retry_count": _retry.get("count", 0),
     })
 
 
