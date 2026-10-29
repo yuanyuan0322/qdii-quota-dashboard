@@ -72,6 +72,8 @@ def log(msg: str) -> None:
 BAD_RESPONSE_LOG = os.path.join(HERE, "_bad_response.log")
 MIN_UNIVERSE = int(os.environ.get("QDII_MIN_UNIVERSE", "600"))   # 全集健康下限
 MIN_ROWS = int(os.environ.get("QDII_MIN_ROWS", "500"))           # 入库健康下限
+# 明细为空的容忍比例：超过此比例视为接口整批失败，拒绝覆盖旧数据
+MAX_BLANK_RATIO = float(os.environ.get("QDII_MAX_BLANK_RATIO", "0.4"))
 
 
 def save_bad(tag: str, text: str | None) -> None:
@@ -459,6 +461,14 @@ def main():
         log(f"！数据异常：本次 {len(rows)} 条（上次 {prev_total} 条，下限 {MIN_ROWS}），"
             f"放弃写入，保留上一次数据")
         save_bad(f"rows too few: {len(rows)} vs {prev_total}", "")
+        sys.exit(3)
+
+    # ---- 质量校验：条数够但明细全空（接口整批失败）时同样不得覆盖 ----
+    n_blank = sum(1 for r in rows if not str(r.get("sgzt_raw") or "").strip())
+    if rows and n_blank >= len(rows) * MAX_BLANK_RATIO:
+        log(f"！数据异常：{n_blank}/{len(rows)} 条明细为空（申购状态未取到，"
+            f"阈值 {MAX_BLANK_RATIO:.0%}），放弃写入，保留上一次数据")
+        save_bad(f"details blank: {n_blank}/{len(rows)}", "")
         sys.exit(3)
 
     stats = build_stats(rows)
